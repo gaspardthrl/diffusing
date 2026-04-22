@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffusing"
+version = "0.1.0"
+description = "SO-101 teleoperation and imitation learning"
+requires-python = ">=3.12"
+
+dependencies = [
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "transformers[torch]>=4.40.0",
+]
+
+[project.optional-dependencies]
+robot = [
+    "lerobot[feetech,viz]",
+]
+dev = [
+    "ipython",
+    "jupyter",
+    "ruff",
+    "black",
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ipython",
+    "ruff",
+]
+
+[tool.uv.sources]
+lerobot = { path = "third_party/lerobot", editable = true }
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = [".venv", "third_party", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "N", "B", "C4"]
