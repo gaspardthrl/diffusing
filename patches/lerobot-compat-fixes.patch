@@ -1,0 +1,48 @@
+diff --git a/src/lerobot/policies/groot/groot_n1.py b/src/lerobot/policies/groot/groot_n1.py
+index abcbb8a8..ecd95266 100644
+--- a/src/lerobot/policies/groot/groot_n1.py
++++ b/src/lerobot/policies/groot/groot_n1.py
+@@ -177,13 +177,13 @@ N_COLOR_CHANNELS = 3
+ @dataclass
+ class GR00TN15Config(PretrainedConfig):
+     model_type = "gr00t_n1_5"
+-    backbone_cfg: dict = field(init=False, metadata={"help": "Backbone configuration."})
++    backbone_cfg: dict = field(init=False, default=None, metadata={"help": "Backbone configuration."})
+ 
+-    action_head_cfg: dict = field(init=False, metadata={"help": "Action head configuration."})
++    action_head_cfg: dict = field(init=False, default=None, metadata={"help": "Action head configuration."})
+ 
+-    action_horizon: int = field(init=False, metadata={"help": "Action horizon."})
++    action_horizon: int = field(init=False, default=None, metadata={"help": "Action horizon."})
+ 
+-    action_dim: int = field(init=False, metadata={"help": "Action dimension."})
++    action_dim: int = field(init=False, default=None, metadata={"help": "Action dimension."})
+     compute_dtype: str = field(default="float32", metadata={"help": "Compute dtype."})
+ 
+     def __init__(self, **kwargs):
+diff --git a/src/lerobot/policies/sarm/processor_sarm.py b/src/lerobot/policies/sarm/processor_sarm.py
+index e939b348..f928b694 100644
+--- a/src/lerobot/policies/sarm/processor_sarm.py
++++ b/src/lerobot/policies/sarm/processor_sarm.py
+@@ -454,8 +454,9 @@ class SARMEncodingProcessorStep(ProcessorStep):
+             inputs = self.clip_processor(images=batch_imgs, return_tensors="pt")
+             inputs = {k: v.to(self.device) for k, v in inputs.items()}
+ 
+-            # Get image embeddings
+-            embeddings = self.clip_model.get_image_features(**inputs).detach().cpu()
++            # Get image embeddings (handle both tensor and model-output-object return types)
++            raw = self.clip_model.get_image_features(**inputs)
++            embeddings = (raw if isinstance(raw, torch.Tensor) else raw.pooler_output).detach().cpu()
+ 
+             # Handle single frame case
+             if embeddings.dim() == 1:
+@@ -482,7 +483,8 @@ class SARMEncodingProcessorStep(ProcessorStep):
+         inputs = self.clip_processor.tokenizer([text], return_tensors="pt", padding=True, truncation=True)
+         inputs = {k: v.to(self.device) for k, v in inputs.items()}
+ 
+-        text_embedding = self.clip_model.get_text_features(**inputs).detach().cpu()
++        raw = self.clip_model.get_text_features(**inputs)
++        text_embedding = (raw if isinstance(raw, torch.Tensor) else raw.pooler_output).detach().cpu()
+         text_embedding = text_embedding.expand(batch_size, -1)
+ 
+         return text_embedding
