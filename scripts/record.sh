@@ -3,7 +3,11 @@ set -e
 
 source .env  # Load FOLLOWER_PORT, LEADER_PORT, etc.
 
-lerobot-teleoperate \
+REPO_ID="${1:-gaspardthrl/walleed}"
+NUM_EPISODES="${2:-10}"
+TASK="${3:-Fold the towel}"
+
+lerobot-record \
   --robot.type=so101_follower \
   --robot.port="$FOLLOWER_PORT" \
   --robot.id="$FOLLOWER_ID" \
@@ -13,4 +17,11 @@ lerobot-teleoperate \
   --teleop.port="$LEADER_PORT" \
   --teleop.id="$LEADER_ID" \
   --teleop.calibration_dir=./calibration \
+  --dataset.repo_id="$REPO_ID" \
+  --dataset.root=./data \
+  --dataset.num_episodes="$NUM_EPISODES" \
+  --dataset.single_task="$TASK" \
+  --dataset.episode_time_s=45 \
+  --dataset.reset_time_s=0 \
+  --resume=true \
   --display_data=true
