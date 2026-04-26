@@ -9,6 +9,7 @@ description = "SO-101 teleoperation and imitation learning"
 requires-python = ">=3.12"
 
 dependencies = [
+    "pynput>=1.8.1",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
     "transformers[torch]>=4.40.0",
