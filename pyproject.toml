@@ -19,6 +19,12 @@ dependencies = [
 robot = [
     "lerobot[feetech,viz]",
 ]
+inference = [
+    "lerobot[async,multi_task_dit]",
+    "grpcio",
+    "grpcio-tools",
+    "protobuf",
+]
 dev = [
     "ipython",
     "jupyter",
