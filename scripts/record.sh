@@ -3,9 +3,10 @@ set -e
 
 source .env  # Load FOLLOWER_PORT, LEADER_PORT, etc.
 
-REPO_ID="${1:-gaspardthrl/walleed}"
+REPO_ID="${1:-gaspardthrl/walleed_act}"
 NUM_EPISODES="${2:-10}"
 TASK="${3:-Fold the towel}"
+RESUME="${4:-true}"
 
 lerobot-record \
   --robot.type=so101_follower \
@@ -23,5 +24,5 @@ lerobot-record \
   --dataset.single_task="$TASK" \
   --dataset.episode_time_s=45 \
   --dataset.reset_time_s=0 \
-  --resume=true \
+  --resume="$RESUME" \
   --display_data=true

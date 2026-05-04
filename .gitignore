@@ -6,3 +6,4 @@ checkpoints/*
 .venv/
 .DS_Store
 __pycache__/
+src/diffusing.egg-info/
