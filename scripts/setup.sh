@@ -12,7 +12,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 uv --version
 
-uv sync --extra robot
+uv sync --python 3.12 --extra robot
 
 # ── Activate virtual environment ──────────────────────────────────────────────
 VENV_PATH="$ROOT_DIR/.venv"
