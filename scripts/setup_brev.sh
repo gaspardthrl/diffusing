@@ -11,7 +11,7 @@ source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH
 
 echo "==> Cloning repo with submodules (skip if already cloned)"
 if [ ! -f pyproject.toml ]; then
-  git clone --recurse-submodules https://github.com/gaspardthrl/diffusing .
+  git clone --recurse-submodules --branch rcc/dit-fm https://github.com/gaspardthrl/diffusing .
 fi
 
 echo "==> Initialising submodule (in case it was cloned without --recurse-submodules)"
@@ -29,9 +29,9 @@ uv run python -c "import torch; print('CUDA available:', torch.cuda.is_available
 
 echo "==> Hugging Face login (paste your token when prompted, or set HF_TOKEN env var)"
 if [ -n "$HF_TOKEN" ]; then
-  uv run huggingface-cli login --token "$HF_TOKEN"
+  uv run hf auth login --token "$HF_TOKEN"
 else
-  uv run huggingface-cli login
+  uv run hf auth login
 fi
 
 echo "==> W&B login (paste your API key when prompted, or set WANDB_API_KEY env var)"

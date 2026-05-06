@@ -24,6 +24,7 @@ inference = [
     "grpcio",
     "grpcio-tools",
     "protobuf",
+    "wandb",
 ]
 dev = [
     "ipython",
