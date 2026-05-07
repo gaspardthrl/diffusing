@@ -54,7 +54,7 @@ uv run lerobot-train \
   `# ── Temporal context ──────────────────────────────────────────────` \
   --policy.n_obs_steps=1 \
   --policy.chunk_size=32 \
-  --policy.n_action_steps=32 \
+  --policy.n_action_steps=24 \
   \
   `# ── Transformer architecture ──────────────────────────────────────` \
   --policy.dim_model=512 \
