@@ -19,11 +19,11 @@ TASK="${TASK:-Fold the towel}"
 DURATION="${DURATION:-60}"   # seconds per episode
 
 # Use MPS on Apple Silicon, CUDA on Linux GPU, else CPU
-if python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
+if uv run python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
   DEVICE="mps"
   export PYTORCH_ENABLE_MPS_FALLBACK=1
   echo "Using MPS (Apple Silicon)"
-elif python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+elif uv run python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
   DEVICE="cuda"
   echo "Using CUDA"
 else
