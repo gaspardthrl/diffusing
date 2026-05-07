@@ -11,10 +11,21 @@ source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH
 
 echo "==> Cloning repo with submodules (skip if already cloned)"
 if [ ! -f pyproject.toml ]; then
-  git clone --recurse-submodules --branch rcc/dit-fm https://github.com/gaspardthrl/diffusing .
+  if [ -n "$GITHUB_PAT" ]; then
+    git clone --recurse-submodules --branch rcc/dit-fm \
+      "https://${GITHUB_PAT}@github.com/gaspardthrl/diffusing" .
+  else
+    git clone --recurse-submodules --branch rcc/dit-fm \
+      https://github.com/gaspardthrl/diffusing .
+  fi
 fi
 
 echo "==> Initialising submodule (in case it was cloned without --recurse-submodules)"
+# Store credentials so future git pulls don't prompt for PAT
+if [ -n "$GITHUB_PAT" ]; then
+  git config --global credential.helper store
+  echo "https://${GITHUB_PAT}@github.com" > ~/.git-credentials
+fi
 git submodule update --init --recursive
 
 echo "==> Installing Python deps (inference extras only — no robot hardware)"
