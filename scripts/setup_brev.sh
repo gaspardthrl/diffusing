@@ -20,20 +20,27 @@ if [ ! -f pyproject.toml ]; then
   fi
 fi
 
-echo "==> Initialising submodule (in case it was cloned without --recurse-submodules)"
-# Store credentials so future git pulls don't prompt for PAT
+echo "==> Storing git credentials and initialising submodules"
 if [ -n "$GITHUB_PAT" ]; then
   git config --global credential.helper store
   echo "https://${GITHUB_PAT}@github.com" > ~/.git-credentials
+  # Point lerobot submodule remote to use PAT so fetch works
+  git -C third_party/lerobot remote set-url origin \
+    "https://${GITHUB_PAT}@github.com/GustaveCharles/lerobot" 2>/dev/null || true
 fi
-git submodule update --init --recursive
+# Force checkout the exact submodule commit rcc/dit-fm points to
+git submodule update --init --recursive --force
+echo "    lerobot submodule at: $(git -C third_party/lerobot rev-parse --short HEAD)"
 
-echo "==> Installing Python deps (inference extras only — no robot hardware)"
+echo "==> Installing Python deps"
 uv sync --extra inference
 
 echo "==> Installing multi_task_dit extras (transformers + diffusers)"
 uv sync --extra multi_task_dit 2>/dev/null || \
   uv pip install transformers diffusers accelerate
+
+echo "==> Installing dataset extras (datasets library)"
+uv pip install 'lerobot[dataset]'
 
 echo "==> Verifying CUDA"
 uv run python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count())"
