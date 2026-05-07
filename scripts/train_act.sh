@@ -1,19 +1,19 @@
 #!/bin/bash
-# Train DiT policy with Flow Matching on the walleed dataset.
+# Train ACT (Action Chunking Transformer) on the walleed dataset.
 #
-# Designed to run on Brev (GPU). Estimated ~2-3h on a single L40S for 100k steps.
+# Designed to run on Brev (GPU). Estimated ~1-2h on a single L40S for 100k steps.
 #
 # Usage:
-#   ./scripts/train_dit_fm.sh                        # default 100k steps
-#   ./scripts/train_dit_fm.sh 50000                  # custom step count
-#   DATASET_ROOT=./data ./scripts/train_dit_fm.sh    # use local data folder
-#   HF_REPO_ID=yourname/walleed-dit ./scripts/train_dit_fm.sh  # push to Hub
+#   ./scripts/train_act.sh                        # default 100k steps
+#   ./scripts/train_act.sh 50000                  # custom step count
+#   DATASET_ROOT=./data ./scripts/train_act.sh    # use local data folder
+#   HF_REPO_ID=yourname/walleed-act ./scripts/train_act.sh  # push to Hub
 #
 set -e
 
 STEPS="${1:-100000}"
 DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_teleop_gaspard}"
-OUTPUT_DIR="outputs/dit_fm_$(date +%Y%m%d_%H%M%S)"
+OUTPUT_DIR="outputs/act_$(date +%Y%m%d_%H%M%S)"
 
 # Optional: push checkpoint to HF Hub after training
 if [ -n "${HF_REPO_ID}" ]; then
@@ -48,48 +48,44 @@ uv run lerobot-train \
   ${DATASET_FLAGS} \
   --dataset.video_backend=pyav \
   \
-  `# ── Policy: DiT + Flow Matching ───────────────────────────────────` \
-  --policy.type=multi_task_dit \
-  --policy.objective=flow_matching \
-  \
-  `# FM inference: 10 steps is enough for straight-path ODE (vs 100 default)` \
-  --policy.num_integration_steps=10 \
-  --policy.integration_method=euler \
-  --policy.timestep_sampling_strategy=beta \
-  --policy.timestep_sampling_alpha=1.5 \
-  --policy.timestep_sampling_beta=1.0 \
-  --policy.sigma_min=0.0 \
+  `# ── Policy: ACT ───────────────────────────────────────────────────` \
+  --policy.type=act \
   \
   `# ── Temporal context ──────────────────────────────────────────────` \
   --policy.n_obs_steps=1 \
-  --policy.horizon=32 \
-  --policy.n_action_steps=24 \
+  --policy.chunk_size=32 \
+  --policy.n_action_steps=32 \
   \
   `# ── Transformer architecture ──────────────────────────────────────` \
-  --policy.hidden_dim=512 \
-  --policy.num_layers=6 \
-  --policy.num_heads=8 \
-  --policy.use_rope=true \
+  --policy.dim_model=512 \
+  --policy.n_heads=8 \
+  --policy.dim_feedforward=3200 \
+  --policy.n_encoder_layers=4 \
+  --policy.n_decoder_layers=1 \
   \
-  `# ── Vision/Text backbone (CLIP ViT-B/16) ──────────────────────────` \
-  --policy.vision_encoder_name=openai/clip-vit-base-patch16 \
-  --policy.text_encoder_name=openai/clip-vit-base-patch16 \
-  --policy.vision_encoder_lr_multiplier=0.1 \
-  `# Resize full scene directly to CLIP's required 224×224 — no crop, no lost corners` \
+  `# ── Vision backbone (ResNet18, ImageNet pretrained) ────────────────` \
+  --policy.vision_backbone=resnet18 \
+  --policy.pretrained_backbone_weights=ResNet18_Weights.IMAGENET1K_V1 \
+  `# Resize full scene to 224×224 — same as DiT, no crop to keep towel corners` \
   --policy.image_resize_shape="[224,224]" \
   `# Grayscale applied inside the model — runs at BOTH train and inference time` \
   --policy.image_grayscale=true \
   \
+  `# ── VAE objective ──────────────────────────────────────────────────` \
+  --policy.use_vae=true \
+  --policy.kl_weight=10.0 \
+  --policy.latent_dim=32 \
+  \
   ${PUSH_FLAGS} \
   \
   `# ── Optimizer ─────────────────────────────────────────────────────` \
-  --policy.optimizer_lr=2e-5 \
-  --policy.scheduler_name=cosine \
-  --policy.scheduler_warmup_steps=1000 \
+  --policy.optimizer_lr=1e-5 \
+  --policy.optimizer_lr_backbone=1e-5 \
+  --policy.optimizer_weight_decay=1e-4 \
   \
   `# ── Image augmentations ────────────────────────────────────────────` \
+  `# Same augmentations as DiT-FM for a fair comparison.` \
   `# Grayscale is handled by --policy.image_grayscale (runs at train+inference).` \
-  `# These 5 augmentations add robustness on top of the grayscale image.` \
   --dataset.image_transforms.enable=true \
   --dataset.image_transforms.max_num_transforms=5 \
   --dataset.image_transforms.random_order=true \
@@ -106,7 +102,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
-  --wandb.notes="DiT FM ${STEPS} steps, 280ep, grayscale+aug, n_obs=1, 10 ODE steps" \
+  --wandb.notes="ACT ${STEPS} steps, 280ep, grayscale+aug, chunk=32" \
   \
   --output_dir="${OUTPUT_DIR}"
 

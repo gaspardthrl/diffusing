@@ -1,19 +1,20 @@
 #!/bin/bash
-# Train DiT policy with Flow Matching on the walleed dataset.
+# Train DiT policy with DDPM objective on the walleed dataset.
+# Run 2 — objective ablation against FM (train_dit_fm.sh).
+# Everything is identical to train_dit_fm.sh except the diffusion objective.
 #
 # Designed to run on Brev (GPU). Estimated ~2-3h on a single L40S for 100k steps.
 #
 # Usage:
-#   ./scripts/train_dit_fm.sh                        # default 100k steps
-#   ./scripts/train_dit_fm.sh 50000                  # custom step count
-#   DATASET_ROOT=./data ./scripts/train_dit_fm.sh    # use local data folder
-#   HF_REPO_ID=yourname/walleed-dit ./scripts/train_dit_fm.sh  # push to Hub
+#   ./scripts/train_dit_ddpm.sh                        # default 100k steps
+#   ./scripts/train_dit_ddpm.sh 50000                  # custom step count
+#   HF_REPO_ID=yourname/walleed-dit-ddpm ./scripts/train_dit_ddpm.sh
 #
 set -e
 
 STEPS="${1:-100000}"
 DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_teleop_gaspard}"
-OUTPUT_DIR="outputs/dit_fm_$(date +%Y%m%d_%H%M%S)"
+OUTPUT_DIR="outputs/dit_ddpm_$(date +%Y%m%d_%H%M%S)"
 
 # Optional: push checkpoint to HF Hub after training
 if [ -n "${HF_REPO_ID}" ]; then
@@ -48,17 +49,16 @@ uv run lerobot-train \
   ${DATASET_FLAGS} \
   --dataset.video_backend=pyav \
   \
-  `# ── Policy: DiT + Flow Matching ───────────────────────────────────` \
+  `# ── Policy: DiT + DDPM ────────────────────────────────────────────` \
   --policy.type=multi_task_dit \
-  --policy.objective=flow_matching \
-  \
-  `# FM inference: 10 steps is enough for straight-path ODE (vs 100 default)` \
-  --policy.num_integration_steps=10 \
-  --policy.integration_method=euler \
-  --policy.timestep_sampling_strategy=beta \
-  --policy.timestep_sampling_alpha=1.5 \
-  --policy.timestep_sampling_beta=1.0 \
-  --policy.sigma_min=0.0 \
+  --policy.objective=diffusion \
+  --policy.noise_scheduler_type=DDPM \
+  --policy.num_train_timesteps=100 \
+  `# 100 denoising steps at inference (DDPM default — much slower than FM's 10)` \
+  --policy.num_inference_steps=100 \
+  --policy.prediction_type=epsilon \
+  --policy.beta_start=0.0001 \
+  --policy.beta_end=0.02 \
   \
   `# ── Temporal context ──────────────────────────────────────────────` \
   --policy.n_obs_steps=1 \
@@ -75,9 +75,7 @@ uv run lerobot-train \
   --policy.vision_encoder_name=openai/clip-vit-base-patch16 \
   --policy.text_encoder_name=openai/clip-vit-base-patch16 \
   --policy.vision_encoder_lr_multiplier=0.1 \
-  `# Resize full scene directly to CLIP's required 224×224 — no crop, no lost corners` \
   --policy.image_resize_shape="[224,224]" \
-  `# Grayscale applied inside the model — runs at BOTH train and inference time` \
   --policy.image_grayscale=true \
   \
   ${PUSH_FLAGS} \
@@ -87,9 +85,7 @@ uv run lerobot-train \
   --policy.scheduler_name=cosine \
   --policy.scheduler_warmup_steps=1000 \
   \
-  `# ── Image augmentations ────────────────────────────────────────────` \
-  `# Grayscale is handled by --policy.image_grayscale (runs at train+inference).` \
-  `# These 5 augmentations add robustness on top of the grayscale image.` \
+  `# ── Image augmentations (identical to FM baseline) ─────────────────` \
   --dataset.image_transforms.enable=true \
   --dataset.image_transforms.max_num_transforms=5 \
   --dataset.image_transforms.random_order=true \
@@ -106,7 +102,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
-  --wandb.notes="DiT FM ${STEPS} steps, 280ep, grayscale+aug, n_obs=1, 10 ODE steps" \
+  --wandb.notes="DiT DDPM ${STEPS} steps, 280ep, grayscale+aug, n_obs=1, 100 denoise steps" \
   \
   --output_dir="${OUTPUT_DIR}"
 
