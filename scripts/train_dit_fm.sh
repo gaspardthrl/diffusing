@@ -106,6 +106,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
+  --wandb.run_name="dit-fm-280ep" \
   --wandb.notes="DiT FM ${STEPS} steps, 280ep, grayscale+aug, n_obs=1, 10 ODE steps" \
   \
   --output_dir="${OUTPUT_DIR}"

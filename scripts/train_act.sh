@@ -102,6 +102,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
+  --wandb.run_name="act-280ep" \
   --wandb.notes="ACT ${STEPS} steps, 280ep, grayscale+aug, chunk=32" \
   \
   --output_dir="${OUTPUT_DIR}"

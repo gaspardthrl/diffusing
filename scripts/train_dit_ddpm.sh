@@ -102,6 +102,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
+  --wandb.run_name="dit-ddpm-280ep" \
   --wandb.notes="DiT DDPM ${STEPS} steps, 280ep, grayscale+aug, n_obs=1, 100 denoise steps" \
   \
   --output_dir="${OUTPUT_DIR}"

@@ -106,6 +106,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
+  --wandb.run_name="dit-fm-frozen-clip-280ep" \
   --wandb.notes="DiT FM frozen-CLIP ${STEPS} steps, 280ep, grayscale+aug, n_obs=1" \
   \
   --output_dir="${OUTPUT_DIR}"
