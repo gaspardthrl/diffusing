@@ -32,9 +32,9 @@ else
 fi
 
 # On Brev use cuda; fall back to mps on Apple Silicon for quick local tests
-if python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+if uv run python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
   DEVICE="cuda"
-elif python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
+elif uv run python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
   DEVICE="mps"
   export PYTORCH_ENABLE_MPS_FALLBACK=1
 else
@@ -42,7 +42,7 @@ else
 fi
 echo "Using device: $DEVICE"
 
-lerobot-train \
+uv run lerobot-train \
   \
   `# ── Dataset ───────────────────────────────────────────────────────` \
   ${DATASET_FLAGS} \
