@@ -100,7 +100,7 @@ uv run lerobot-train \
   --batch_size=64 \
   --num_workers=8 \
   --log_freq=200 \
-  --save_freq=50000 \
+  --save_freq=10000 \
   --policy.device="${DEVICE}" \
   \
   `# ── Logging ───────────────────────────────────────────────────────` \

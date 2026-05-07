@@ -27,8 +27,15 @@ uv sync --extra multi_task_dit 2>/dev/null || \
 echo "==> Verifying CUDA"
 uv run python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count())"
 
-echo "==> Hugging Face login (paste your token when prompted, or set HF_TOKEN env var)"
-if [ -n "$HF_TOKEN" ]; then
+echo "==> Hugging Face login"
+# HF_DATASET_TOKEN: read token for private datasets (e.g. gaspardthrl/walleed_teleop_gaspard)
+# HF_TOKEN:         write token for pushing model checkpoints to your own account
+# If only HF_TOKEN is provided it is used for both (works when dataset is public).
+if [ -n "$HF_DATASET_TOKEN" ]; then
+  echo "    Caching dataset read token (HF_DATASET_TOKEN)..."
+  uv run hf auth login --token "$HF_DATASET_TOKEN"
+  echo "    Write token (HF_TOKEN) will be used for model push."
+elif [ -n "$HF_TOKEN" ]; then
   uv run hf auth login --token "$HF_TOKEN"
 else
   uv run hf auth login
