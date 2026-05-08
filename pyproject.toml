@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "diffusing"
 version = "0.1.0"
 description = "SO-101 teleoperation and imitation learning"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 
 dependencies = [
     "pynput>=1.8.1",

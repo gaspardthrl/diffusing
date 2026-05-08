@@ -3,7 +3,7 @@ set -e
 
 source .env  # Load FOLLOWER_PORT, LEADER_PORT, etc.
 
-REPO_ID="${1:-gaspardthrl/walleed_act}"
+REPO_ID="${1:-gaspardthrl/walleed_teleop_vincent}"
 NUM_EPISODES="${2:-10}"
 TASK="${3:-Fold the towel}"
 RESUME="${4:-true}"
