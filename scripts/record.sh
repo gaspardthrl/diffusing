@@ -7,6 +7,7 @@ REPO_ID="${1:-gaspardthrl/walleed_act}"
 NUM_EPISODES="${2:-10}"
 TASK="${3:-Fold the towel}"
 RESUME="${4:-true}"
+TIME="${5:-60}"
 
 lerobot-record \
   --robot.type=so101_follower \
@@ -22,7 +23,7 @@ lerobot-record \
   --dataset.root=./data \
   --dataset.num_episodes="$NUM_EPISODES" \
   --dataset.single_task="$TASK" \
-  --dataset.episode_time_s=45 \
+  --dataset.episode_time_s="$TIME" \
   --dataset.reset_time_s=0 \
   --resume="$RESUME" \
   --display_data=true
