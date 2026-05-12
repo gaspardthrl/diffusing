@@ -17,7 +17,7 @@
 set -e
 
 STEPS="${1:-100000}"
-DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_teleop_gaspard}"
+DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_hg_double_fold_clean}"
 OUTPUT_DIR="outputs/dit_fm_v2_$(date +%Y%m%d_%H%M%S)"
 
 # Optional: push checkpoint to HF Hub after training
@@ -143,7 +143,7 @@ uv run lerobot-train \
   `# ── Logging ───────────────────────────────────────────────────────` \
   --wandb.enable=true \
   --wandb.project=diffusing \
-  --wandb.run_name="dit-fm-v2" \
+  --job_name="dit-fm-v2" \
   --wandb.notes="DiT FM ${STEPS} steps, frozen CLIP, grayworld+warmth aug, relative actions (gripper abs), n_obs=1, 10 ODE steps" \
   \
   --output_dir="${OUTPUT_DIR}"
