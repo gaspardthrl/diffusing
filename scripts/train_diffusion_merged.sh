@@ -59,7 +59,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-outputs/diffusion-resnet-merged}"
 DATASET_REPO=gaspardthrl/walleed_fold_combined
 MODEL_REPO=gaspardthrl/diffusion-resnet-merged
 WANDB_PROJECT=diffusion-resnet-merged
-WANDB_ENTITY=gaspardthrl
+WANDB_ENTITY="${WANDB_ENTITY:-lsai-project-26}"
 
 # Resize 480x640 -> 224x224 (canonical ResNet18 ImageNet input). No crop.
 RESIZE_H=224
@@ -86,6 +86,7 @@ exec lerobot-train \
     --policy.type=diffusion \
     --policy.vision_backbone=resnet18 \
     --policy.pretrained_backbone_weights=DEFAULT \
+    --policy.use_group_norm=false \
     --policy.n_obs_steps=1 \
     --policy.horizon=32 \
     --policy.n_action_steps=24 \
