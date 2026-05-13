@@ -24,7 +24,12 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo-id", default="gaspardthrl/walleed_teleop_gaspard")
+    parser.add_argument("--repo-id", default="gaspardthrl/walleed_hg_double_fold")
+    parser.add_argument(
+        "--revision",
+        default=None,
+        help="Pin to a specific HF commit (e.g. 09a23364a3a7). Default uses latest.",
+    )
     parser.add_argument(
         "--root",
         default=os.environ.get("DATASET_ROOT", "./data"),
@@ -51,8 +56,8 @@ def main():
     # ── 1. Load dataset ───────────────────────────────────────────────
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    logging.info(f"Loading dataset {args.repo_id} from {root} ...")
-    dataset = LeRobotDataset(repo_id=args.repo_id, root=str(root))
+    logging.info(f"Loading dataset {args.repo_id} from {root} (revision={args.revision or 'latest'}) ...")
+    dataset = LeRobotDataset(repo_id=args.repo_id, root=str(root), revision=args.revision)
 
     # ── 2. Compute relative action stats ─────────────────────────────
     from lerobot.datasets.compute_stats import compute_relative_action_stats
