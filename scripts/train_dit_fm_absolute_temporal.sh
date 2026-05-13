@@ -110,6 +110,7 @@ uv run lerobot-train \
   `# ── ABSOLUTE actions ──────────────────────────────────────────────` \
   --policy.use_relative_actions=false \
   --policy.action_feature_names='["shoulder_pan","shoulder_lift","elbow_flex","wrist_flex","wrist_roll","gripper"]' \
+  --policy.default_task="Fold the towel" \
   \
   `# ── STATE-HISTORY temporal features ───────────────────────────────` \
   `# State input grows from 6D to 6 + len(motors)*len(lags) = 10D.` \

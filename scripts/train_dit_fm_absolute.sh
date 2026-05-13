@@ -69,6 +69,7 @@ uv run lerobot-train \
   `# ── ABSOLUTE ACTIONS (no relative conversion) ─────────────────────` \
   --policy.use_relative_actions=false \
   --policy.action_feature_names='["shoulder_pan","shoulder_lift","elbow_flex","wrist_flex","wrist_roll","gripper"]' \
+  --policy.default_task="Fold the towel" \
   \
   ${PUSH_FLAGS} \
   \
