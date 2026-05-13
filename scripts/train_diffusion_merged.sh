@@ -61,9 +61,9 @@ MODEL_REPO=gaspardthrl/diffusion-resnet-merged
 WANDB_PROJECT=diffusion-resnet-merged
 WANDB_ENTITY=gaspardthrl
 
-# Image crop: 95% of 480x640 = 456x608. crop_is_random=true at train, center at eval.
-CROP_H=456
-CROP_W=608
+# Resize 480x640 -> 224x224 (canonical ResNet18 ImageNet input). No crop.
+RESIZE_H=224
+RESIZE_W=224
 
 echo "=================================================================="
 echo "Diffusion Policy training"
@@ -75,7 +75,8 @@ echo "  backbone:       resnet18 (pretrained on ImageNet)"
 echo "  actions:        absolute"
 echo "  n_obs_steps:    1"
 echo "  horizon:        32   n_action_steps: 24   drop_n_last_frames: 8"
-echo "  random crop:    ${CROP_H}x${CROP_W} of 480x640"
+echo "  resize:         ${RESIZE_H}x${RESIZE_W}  (no crop, full FOV preserved)"
+echo "  preprocessing:  grayworld + grayscale (mirrors DiT)"
 echo "  batch / steps:  $BATCH_SIZE / $STEPS    (save every $SAVE_FREQ)"
 echo "  device:         cuda + AMP"
 echo "=================================================================="
@@ -89,8 +90,10 @@ exec lerobot-train \
     --policy.horizon=32 \
     --policy.n_action_steps=24 \
     --policy.drop_n_last_frames=8 \
-    --policy.crop_shape="[$CROP_H,$CROP_W]" \
-    --policy.crop_is_random=true \
+    --policy.resize_shape="[$RESIZE_H,$RESIZE_W]" \
+    --policy.crop_ratio=1.0 \
+    --policy.grayworld=true \
+    --policy.grayscale=true \
     --policy.device=cuda \
     --policy.use_amp=true \
     --policy.push_to_hub=true \
