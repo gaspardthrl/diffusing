@@ -17,7 +17,7 @@ import json
 import logging
 from pathlib import Path
 
-import cv2
+import av
 import numpy as np
 import pandas as pd
 import torch
@@ -49,21 +49,18 @@ CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
-# Per-worker video capture cache — each DataLoader worker process has its own copy
-_caps: dict[str, cv2.VideoCapture] = {}
 
 
 def _read_frame(video_path: str, abs_frame: int) -> np.ndarray:
-    if video_path not in _caps or not _caps[video_path].isOpened():
-        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
-        cap.set(cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_NONE)
-        _caps[video_path] = cap
-    cap = _caps[video_path]
-    cap.set(cv2.CAP_PROP_POS_FRAMES, abs_frame)
-    ret, frame = cap.read()
-    if not ret:
-        raise RuntimeError(f"Failed to read frame {abs_frame} from {video_path}")
-    return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    with av.open(video_path) as container:
+        stream = container.streams.video[0]
+        stream.codec_context.thread_type = av.codec.context.ThreadType.AUTO
+        container.seek(abs_frame, stream=stream, any_frame=True)
+        for packet in container.demux(stream):
+            for frame in packet.decode():
+                if frame.pts is not None and frame.pts >= abs_frame:
+                    return frame.to_ndarray(format="rgb24")
+    raise RuntimeError(f"Failed to read frame {abs_frame} from {video_path}")
 
 
 def apply_grayworld(x: torch.Tensor) -> torch.Tensor:
