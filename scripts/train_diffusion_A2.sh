@@ -68,7 +68,7 @@ uv run lerobot-train \
   --policy.num_train_timesteps=100 \
   --policy.prediction_type=epsilon \
   --policy.clip_sample=true \
-  --policy.clip_sample_range=2.0 \
+  --policy.clip_sample_range=3.0 \
   --policy.action_normalization_mode=MEAN_STD \
   \
   `# ── A2: gripper-only state (index 5), relative actions ───────────` \

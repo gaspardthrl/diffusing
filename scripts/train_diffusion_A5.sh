@@ -81,7 +81,7 @@ uv run lerobot-train \
   --policy.num_train_timesteps=100 \
   --policy.prediction_type=epsilon \
   --policy.clip_sample=true \
-  --policy.clip_sample_range=2.0 \
+  --policy.clip_sample_range=3.0 \
   \
   `# ── A5: EEF delta actions, no proprio, no relative_stats needed ───` \
   --policy.use_eef_actions=true \
