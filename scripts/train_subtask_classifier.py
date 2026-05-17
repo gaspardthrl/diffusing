@@ -214,8 +214,8 @@ class FrozenBackbone(nn.Module):
         super().__init__()
         self.name = name
         if name == "clip":
-            from transformers import CLIPVisionModel
-            self._m = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+            from transformers import CLIPVisionModelWithProjection
+            self._m = CLIPVisionModelWithProjection.from_pretrained("openai/clip-vit-base-patch32")
             self.feat_dim = 512
         elif name == "dinov2_s":
             self._m = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
@@ -239,7 +239,7 @@ class FrozenBackbone(nn.Module):
     @torch.no_grad()
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.name == "clip":
-            return self._m(pixel_values=x).pooler_output
+            return self._m(pixel_values=x).image_embeds
         elif self.name.startswith("dinov2"):
             return self._m(x)
         else:
