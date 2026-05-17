@@ -28,6 +28,7 @@ uv run python third_party/lerobot/src/lerobot/data_processing/sarm_annotations/s
   --model "${MODEL}" \
   --device cuda \
   --dtype bfloat16 \
+  --skip-existing \
   --push-to-hub \
   --num-visualizations "${NUM_VIZ}" \
   --visualize-type dense \

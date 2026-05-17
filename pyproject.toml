@@ -9,6 +9,7 @@ description = "SO-101 teleoperation and imitation learning"
 requires-python = "==3.12.*"
 
 dependencies = [
+    "pin>=3.7.0",
     "pynput>=1.8.1",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
@@ -18,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 robot = [
-    "lerobot[feetech,viz,datasets,multi_task_dit]",
+    "lerobot[feetech,viz,dataset,multi_task_dit",
 ]
 inference = [
     "lerobot[async,multi_task_dit]",

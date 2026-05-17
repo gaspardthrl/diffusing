@@ -58,6 +58,8 @@ uv run lerobot-train \
   \
   --policy.vision_backbone=resnet18 \
   --policy.use_group_norm=true \
+  --policy.image_grayworld=true \
+  --policy.image_grayscale=true \
   --policy.resize_shape="[96,96]" \
   --policy.crop_is_random=true \
   --policy.spatial_softmax_num_keypoints=32 \
