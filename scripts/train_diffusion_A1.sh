@@ -7,7 +7,7 @@
 #   DATASET_ROOT=./data HF_REPO_ID=user/repo ./scripts/train_diffusion_A1.sh
 set -e
 
-STEPS="${1:-200000}"
+STEPS="${1:-100000}"
 DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_fold_combined}"
 OUTPUT_DIR="outputs/diffusion_A1_$(date +%Y%m%d_%H%M%S)"
 
@@ -59,7 +59,7 @@ uv run lerobot-train \
   --policy.vision_backbone=resnet18 \
   --policy.use_group_norm=true \
   --policy.image_grayworld=true \
-  --policy.image_grayscale=true \
+  --policy.image_grayscale=false \
   --policy.resize_shape="[96,96]" \
   --policy.crop_is_random=true \
   --policy.spatial_softmax_num_keypoints=32 \
