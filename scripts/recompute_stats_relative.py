@@ -48,6 +48,13 @@ def main():
         help="Filename written to <root>/meta/. Also uploaded to the HF dataset repo.",
     )
     parser.add_argument("--no-upload", action="store_true", help="Skip HuggingFace upload.")
+    parser.add_argument(
+        "--gripper-dim",
+        type=int,
+        default=5,
+        help="Action dimension index for gripper (excluded from relative actions, stays binary 0/1). "
+             "Its mean/std are patched to be MIN_MAX-equivalent so MEAN_STD normalization works correctly.",
+    )
     args = parser.parse_args()
 
     root = Path(args.root)
@@ -71,7 +78,22 @@ def main():
         num_workers=args.num_workers,
     )
 
-    # ── 3. Save locally ───────────────────────────────────────────────
+    # ── 3. Patch gripper dim mean/std to be MIN_MAX-equivalent ────────
+    # Gripper is binary {0, 1} and excluded from relative actions.
+    # With MEAN_STD normalization, its actual mean/std depend on dataset balance
+    # and can place values outside [-1, 1], conflicting with clip_sample_range.
+    # Patching to (min+max)/2, (max-min)/2 maps {min→-1, max→+1} regardless of
+    # the observed distribution — identical to MIN_MAX behavior.
+    g = args.gripper_dim
+    g_min, g_max = rel_stats["min"][g], rel_stats["max"][g]
+    rel_stats["mean"][g] = (g_min + g_max) / 2.0
+    rel_stats["std"][g] = (g_max - g_min) / 2.0
+    logging.info(
+        f"Gripper dim {g}: patched mean={rel_stats['mean'][g]:.4f}, std={rel_stats['std'][g]:.4f} "
+        f"(MIN_MAX-equivalent from min={g_min:.4f}, max={g_max:.4f})"
+    )
+
+    # ── 4. Save locally ───────────────────────────────────────────────
     # rel_stats values are numpy arrays; convert to plain lists for JSON.
     serializable = {
         "action": {k: v.tolist() for k, v in rel_stats.items()}
@@ -81,14 +103,14 @@ def main():
         json.dump(serializable, f, indent=2)
     logging.info(f"Saved relative stats to {out_path}")
 
-    # ── 4. Sanity-check printout ──────────────────────────────────────
+    # ── 5. Sanity-check printout ──────────────────────────────────────
     action = serializable["action"]
     print("\nRelative action stats (arm joints are deltas, gripper is absolute):")
     print(f"  min:  {action.get('min')}")
     print(f"  max:  {action.get('max')}")
     print(f"  mean: {action.get('mean')}")
 
-    # ── 5. Upload to HF ───────────────────────────────────────────────
+    # ── 6. Upload to HF ───────────────────────────────────────────────
     if not args.no_upload:
         from huggingface_hub import HfApi
 
