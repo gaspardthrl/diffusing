@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 robot = [
-    "lerobot[feetech,viz,dataset,multi_task_dit",
+    "lerobot[feetech,viz,dataset,multi_task_dit]",
 ]
 inference = [
     "lerobot[async,multi_task_dit]",
