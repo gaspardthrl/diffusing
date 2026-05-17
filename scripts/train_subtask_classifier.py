@@ -55,7 +55,9 @@ _caps: dict[str, cv2.VideoCapture] = {}
 
 def _read_frame(video_path: str, abs_frame: int) -> np.ndarray:
     if video_path not in _caps or not _caps[video_path].isOpened():
-        _caps[video_path] = cv2.VideoCapture(video_path)
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+        cap.set(cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_NONE)
+        _caps[video_path] = cap
     cap = _caps[video_path]
     cap.set(cv2.CAP_PROP_POS_FRAMES, abs_frame)
     ret, frame = cap.read()
