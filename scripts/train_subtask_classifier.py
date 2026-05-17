@@ -56,14 +56,21 @@ def _read_frame(video_path: str, abs_frame: int) -> np.ndarray:
         stream = container.streams.video[0]
         stream.codec_context.thread_type = av.codec.context.ThreadType.AUTO
         fps = float(stream.average_rate or 30)
-        seek_ts = int(abs_frame / fps / stream.time_base)
-        container.seek(seek_ts, stream=stream)
+        # Seek 1s before target so the keyframe lands before abs_frame
+        seek_s = max(0.0, abs_frame / fps - 1.0)
+        seek_pts = int(seek_s / stream.time_base)
+        container.seek(seek_pts, stream=stream)
+        last_frame = None
         for frame in container.decode(stream):
             if frame.pts is None:
                 continue
             frame_idx = int(round(float(frame.pts * stream.time_base) * fps))
+            last_frame = frame
             if frame_idx >= abs_frame:
                 return frame.to_ndarray(format="rgb24")
+        # Fallback: video ended just before abs_frame (e.g. last frames of file)
+        if last_frame is not None:
+            return last_frame.to_ndarray(format="rgb24")
     raise RuntimeError(f"Failed to read frame {abs_frame} from {video_path}")
 
 
