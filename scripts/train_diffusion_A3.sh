@@ -130,7 +130,6 @@ uv run lerobot-train \
   --job_name="diffusion-A3-proprio-dropout" \
   --wandb.notes="A3 proprio dropout p=0.3, relative actions, MEAN_STD action norm, ResNet-18, ${STEPS} steps" \
   \
-  --resume=true \
   --output_dir="${OUTPUT_DIR}"
 
 echo "Done. Checkpoint: ${OUTPUT_DIR}"
