@@ -106,6 +106,26 @@ def main() -> None:
     np.save(out, arr)
     print(f"Saved {arr.shape[0]} labels to {out}  (unique classes: {np.unique(arr).tolist()})")
 
+    # Also dump state min/max via lerobot's own metadata loader so the diffusion model
+    # can denormalize state -> raw before renormalizing with the classifier's stats.
+    state_stats_out = out.parent / "subtask_state_stats.json"
+    import json
+    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    repo_id_env = "gaspardthrl/walleed_hg_double_fold_clean"
+    import os
+    repo_id_env = os.environ.get("DATASET_REPO_ID", repo_id_env)
+    meta = LeRobotDatasetMetadata(repo_id=repo_id_env, root=root)
+    s = meta.stats["observation.state"]
+    payload = {
+        "observation.state": {
+            "min": (s["min"].tolist() if hasattr(s["min"], "tolist") else list(s["min"])),
+            "max": (s["max"].tolist() if hasattr(s["max"], "tolist") else list(s["max"])),
+        }
+    }
+    with open(state_stats_out, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"Saved state min/max to {state_stats_out}")
+
 
 if __name__ == "__main__":
     main()

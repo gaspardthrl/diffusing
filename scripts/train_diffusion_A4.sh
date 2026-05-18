@@ -40,7 +40,8 @@ fi
 SUBTASK_CLS_REPO="${SUBTASK_CLS_REPO:-gaspardthrl/walleed-subtask-cls}"
 SUBTASK_CLS_FILE="${SUBTASK_CLS_FILE:-dinov2_s/best.pt}"
 PREV_SUBTASK_FILE="${DATASET_ROOT:-./data}/meta/prev_subtask.npy"
-if [ ! -f "${PREV_SUBTASK_FILE}" ]; then
+STATE_STATS_FILE="${DATASET_ROOT:-./data}/meta/subtask_state_stats.json"
+if [ ! -f "${PREV_SUBTASK_FILE}" ] || [ ! -f "${STATE_STATS_FILE}" ]; then
   echo "Downloading dataset meta files (info.json + episodes annotations)..."
   uv run python - <<'PYEOF'
 import os
@@ -104,7 +105,7 @@ uv run lerobot-train \
   --policy.subtask_classifier_repo="${SUBTASK_CLS_REPO}" \
   --policy.subtask_classifier_filename="${SUBTASK_CLS_FILE}" \
   --policy.subtask_prev_array_path="${PREV_SUBTASK_FILE}" \
-  --policy.subtask_dataset_state_stats_path="${STATS_FILE}" \
+  --policy.subtask_dataset_state_stats_path="${STATE_STATS_FILE}" \
   \
   ${PUSH_FLAGS} \
   \
