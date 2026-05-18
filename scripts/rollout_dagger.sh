@@ -4,13 +4,15 @@ set -e
 source .env 
 
 POLICY_PATH="${1:-gaspardthrl/walleed_dit_fm_absolute}"
-REPO_ID="${2:-gaspardthrl/rollout_hil_dataset}"
+REPO_ID="${2:-gaspardthrl/rollout_hil_dataset_gus_2}"
 NUM_EPISODES="${3:-50}"
 TASK="${4:-Fold the towel}"
 
 lerobot-rollout \
   --strategy.type=dagger \
   --strategy.num_episodes="$NUM_EPISODES" \
+  --strategy.record_autonomous=true \
+  --strategy.upload_every_n_episodes=5 \
   --robot.type=so101_follower \
   --robot.port="$FOLLOWER_PORT" \
   --robot.id="$FOLLOWER_ID" \
@@ -26,4 +28,6 @@ lerobot-rollout \
   --dataset.fps=30 \
   --dataset.episode_time_s=60 \
   --dataset.num_episodes="$NUM_EPISODES" \
-  --interpolation_multiplier=2
+  --interpolation_multiplier=2 \
+  --dataset.root=./data \
+  --resume=false
