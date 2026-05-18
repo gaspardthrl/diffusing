@@ -9,7 +9,7 @@
 set -e
 
 STEPS="${1:-100000}"
-DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_fold_combined}"
+DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_hg_double_fold_clean}"
 OUTPUT_DIR="outputs/diffusion_A3_$(date +%Y%m%d_%H%M%S)"
 
 if [ -n "${HF_REPO_ID}" ]; then
@@ -30,7 +30,7 @@ if [ ! -f "${STATS_FILE}" ]; then
   uv run python - <<'PYEOF'
 import os
 from huggingface_hub import hf_hub_download
-repo_id = os.environ.get("DATASET_REPO_ID", "gaspardthrl/walleed_fold_combined")
+repo_id = os.environ.get("DATASET_REPO_ID", "gaspardthrl/walleed_hg_double_fold_clean")
 root = os.environ.get("DATASET_ROOT", "./data")
 os.makedirs(f"{root}/meta", exist_ok=True)
 hf_hub_download(repo_id=repo_id, filename="meta/relative_stats.json", repo_type="dataset", local_dir=root)
