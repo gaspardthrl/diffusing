@@ -1,3 +1,4 @@
+
 #!/bin/bash
 # A3 — Proprio dropout (full 6D state, p=0.3 dropout during training only)
 # Purpose: regularize dependence on proprio, encourage vision-driven fallback.
@@ -36,6 +37,15 @@ hf_hub_download(repo_id=repo_id, filename="meta/relative_stats.json", repo_type=
 PYEOF
 fi
 
+# Subtask classifier conditioning: 8-D softmax probs from a frozen DINOv2-S classifier.
+SUBTASK_CLS_REPO="${SUBTASK_CLS_REPO:-gaspardthrl/walleed-subtask-cls}"
+SUBTASK_CLS_FILE="${SUBTASK_CLS_FILE:-dino/best.pt}"
+PREV_SUBTASK_FILE="${DATASET_ROOT:-./data}/meta/prev_subtask.npy"
+if [ ! -f "${PREV_SUBTASK_FILE}" ]; then
+  echo "Generating ${PREV_SUBTASK_FILE} from dense subtask annotations..."
+  uv run python scripts/precompute_prev_subtask.py --dataset-root "${DATASET_ROOT:-./data}"
+fi
+
 if uv run python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
   DEVICE="cuda"
 elif uv run python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
@@ -58,7 +68,7 @@ uv run lerobot-train \
   --policy.vision_backbone=resnet18 \
   --policy.use_group_norm=true \
   --policy.image_grayworld=true \
-  --policy.image_grayscale=false \
+  --policy.image_grayscale=true \
   --policy.resize_shape="[96,96]" \
   --policy.crop_is_random=true \
   --policy.spatial_softmax_num_keypoints=32 \
@@ -76,6 +86,13 @@ uv run lerobot-train \
   --policy.action_feature_names='["shoulder_pan","shoulder_lift","elbow_flex","wrist_flex","wrist_roll","gripper"]' \
   --policy.state_indices=null \
   --policy.proprio_dropout=0.3 \
+  \
+  `# ── Subtask classifier conditioning (8-D softmax probs) ──────────` \
+  --policy.use_subtask_classifier=true \
+  --policy.subtask_classifier_repo="${SUBTASK_CLS_REPO}" \
+  --policy.subtask_classifier_filename="${SUBTASK_CLS_FILE}" \
+  --policy.subtask_prev_array_path="${PREV_SUBTASK_FILE}" \
+  --policy.subtask_dataset_state_stats_path="${STATS_FILE}" \
   \
   ${PUSH_FLAGS} \
   \
@@ -100,6 +117,8 @@ uv run lerobot-train \
   --job_name="diffusion-A3-proprio-dropout" \
   --wandb.notes="A3 proprio dropout p=0.3, relative actions, MEAN_STD action norm, ResNet-18, ${STEPS} steps" \
   \
+  --resume=true \
   --output_dir="${OUTPUT_DIR}"
 
 echo "Done. Checkpoint: ${OUTPUT_DIR}"
+
