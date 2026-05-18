@@ -38,7 +38,7 @@ fi
 
 # Subtask classifier conditioning: 8-D softmax probs from a frozen DINOv2-S classifier.
 SUBTASK_CLS_REPO="${SUBTASK_CLS_REPO:-gaspardthrl/walleed-subtask-cls}"
-SUBTASK_CLS_FILE="${SUBTASK_CLS_FILE:-dino/best.pt}"
+SUBTASK_CLS_FILE="${SUBTASK_CLS_FILE:-dinov2_s/best.pt}"
 PREV_SUBTASK_FILE="${DATASET_ROOT:-./data}/meta/prev_subtask.npy"
 if [ ! -f "${PREV_SUBTASK_FILE}" ]; then
   echo "Downloading dataset meta files (info.json + episodes annotations)..."
