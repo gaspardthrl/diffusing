@@ -41,6 +41,19 @@ SUBTASK_CLS_REPO="${SUBTASK_CLS_REPO:-gaspardthrl/walleed-subtask-cls}"
 SUBTASK_CLS_FILE="${SUBTASK_CLS_FILE:-dino/best.pt}"
 PREV_SUBTASK_FILE="${DATASET_ROOT:-./data}/meta/prev_subtask.npy"
 if [ ! -f "${PREV_SUBTASK_FILE}" ]; then
+  echo "Downloading dataset meta files (info.json + episodes annotations)..."
+  uv run python - <<'PYEOF'
+import os
+from huggingface_hub import snapshot_download
+repo_id = os.environ.get("DATASET_REPO_ID", "gaspardthrl/walleed_hg_double_fold_clean")
+root = os.environ.get("DATASET_ROOT", "./data")
+snapshot_download(
+    repo_id=repo_id,
+    repo_type="dataset",
+    allow_patterns=["meta/info.json", "meta/episodes/**/*.parquet"],
+    local_dir=root,
+)
+PYEOF
   echo "Generating ${PREV_SUBTASK_FILE} from dense subtask annotations..."
   uv run python scripts/precompute_prev_subtask.py --dataset-root "${DATASET_ROOT:-./data}"
 fi

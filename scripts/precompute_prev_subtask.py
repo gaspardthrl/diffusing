@@ -75,12 +75,20 @@ def main() -> None:
     if not ep_labels:
         raise RuntimeError(f"No dense_subtask_names found under {root}/meta/episodes/")
 
-    # 2) Determine total frame count from data parquets.
-    max_idx = 0
-    for f in sorted(root.glob("data/**/*.parquet")):
-        df = pd.read_parquet(f, columns=["index"])
-        max_idx = max(max_idx, int(df["index"].max()))
-    total = max_idx + 1
+    # 2) Total frame count: prefer meta/info.json (small file, always present);
+    #    fall back to scanning data parquets if needed.
+    info_path = root / "meta" / "info.json"
+    if info_path.exists():
+        import json
+        with open(info_path) as f:
+            info = json.load(f)
+        total = int(info["total_frames"])
+    else:
+        max_idx = 0
+        for f in sorted(root.glob("data/**/*.parquet")):
+            df = pd.read_parquet(f, columns=["index"])
+            max_idx = max(max_idx, int(df["index"].max()))
+        total = max_idx + 1
 
     # 3) Build prev_subtask: shift labels by one within each episode, clamp at boundary.
     arr = np.zeros(total, dtype=np.int8)
