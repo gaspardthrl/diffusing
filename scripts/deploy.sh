@@ -17,6 +17,8 @@ source .env  # Load FOLLOWER_PORT, FOLLOWER_ID etc.
 POLICY_PATH="${1:-Shish999/walleed-dit-fm-100k}"
 TASK="${TASK:-Fold the towel}"
 DURATION="${DURATION:-60}"   # seconds per episode
+JOINT_OFFSET="${JOINT_OFFSET:-0}"        # offset in degrees applied to OFFSET_MOTORS
+OFFSET_MOTORS="${OFFSET_MOTORS:-[shoulder_pan,wrist_roll]}"  # motors 0 and 4 by default
 
 # Use MPS on Apple Silicon, CUDA on Linux GPU, else CPU
 if uv run python -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
@@ -40,6 +42,8 @@ uv run lerobot-rollout \
   \
   `# ── Strategy ────────────────────────────────────────────────────────` \
   --strategy.type=base \
+  --strategy.joint_offset="${JOINT_OFFSET}" \
+  --strategy.offset_motors="${OFFSET_MOTORS}" \
   \
   `# ── Policy ──────────────────────────────────────────────────────────` \
   --policy.path="${POLICY_PATH}" \
