@@ -15,14 +15,17 @@
 set -e
 
 STEPS="${1:-50000}"
-RESUME_FROM="${RESUME_FROM:?Set RESUME_FROM=outputs/<run>/checkpoints/last (the dir containing pretrained_model/)}"
+RESUME_FROM="${RESUME_FROM:?Set RESUME_FROM=<local checkpoint dir> or <hub repo id like gaspardthrl/walleed_dit_fm_absolute>}"
 DATASET_REPO_ID="${DATASET_REPO_ID:-gaspardthrl/walleed_fold_combined_with_vincent_random}"
 OUTPUT_DIR="outputs/dit_fm_absolute_generalization_$(date +%Y%m%d_%H%M%S)"
 
-if [ ! -d "${RESUME_FROM}/pretrained_model" ]; then
-  echo "ERROR: ${RESUME_FROM}/pretrained_model not found." >&2
-  echo "RESUME_FROM should point to a checkpoint dir like outputs/<run>/checkpoints/last" >&2
-  exit 1
+# Resolve RESUME_FROM to a --policy.path value.
+# Local checkpoint dirs have a pretrained_model/ subdir; Hub repos and bare
+# checkpoint dirs do not, so use the path as-is.
+if [ -d "${RESUME_FROM}/pretrained_model" ]; then
+  POLICY_PATH="${RESUME_FROM}/pretrained_model"
+else
+  POLICY_PATH="${RESUME_FROM}"
 fi
 
 HF_REPO_ID="${HF_REPO_ID:-gaspardthrl/dit-fm-absolute-generalization-vincent}"
@@ -48,7 +51,7 @@ echo "Using device: $DEVICE"
 # --policy.path loads the trained weights + architecture from the checkpoint;
 # optimizer/scheduler start fresh, which is what we want for generalization fine-tune.
 uv run lerobot-train \
-  --policy.path="${RESUME_FROM}/pretrained_model" \
+  --policy.path="${POLICY_PATH}" \
   \
   ${DATASET_FLAGS} \
   --dataset.video_backend=pyav \
