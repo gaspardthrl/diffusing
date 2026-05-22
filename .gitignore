@@ -7,3 +7,10 @@ checkpoints/*
 .DS_Store
 __pycache__/
 src/diffusing.egg-info/
+src/lerobot_policy_diffusing.egg-info/
+data_combined/
+data_hg/
+data_hg_clean/
+*.egg-info/
+test.py
+*.png
