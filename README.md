@@ -1,10 +1,45 @@
 # diffusing
 
-SO-101 imitation learning with async inference support via [LeRobot](https://github.com/huggingface/lerobot).
+Imitation-learning experiments on the SO-101 robot arm for a two-fold towel-folding task.
+The codebase wraps a custom fork of [LeRobot](https://github.com/huggingface/lerobot)
+(vendored at `third_party/lerobot`, tracking [GustaveCharles/lerobot](https://github.com/GustaveCharles/lerobot))
+with shell scripts and a small processor library for dataset recording, policy training, and
+hardware deployment.
 
-The repo wraps [LeRobot](https://github.com/huggingface/lerobot) (vendored as a git submodule under `third_party/lerobot`) with thin shell scripts for the SO-101 leader/follower workflow: motor setup, calibration, teleoperation, dataset recording, policy training, and async inference (policy server + robot client).
+The central research question is generalisation to new table positions: A1–A5 are an ablation
+ladder over action spaces and proprio conditioning; the DiT + Flow Matching track explores a
+heavier transformer backbone. See `EXPERIMENTS.md` for the full rationale.
 
-## Setup
+---
+
+## Table of Contents
+
+1. [Requirements](#requirements)
+2. [Installation](#installation)
+3. [Hardware setup](#hardware-setup)
+4. [Recording data](#recording-data)
+5. [Training — Diffusion A1–A5](#training--diffusion-a1a5)
+6. [Training — DiT + Flow Matching](#training--dit--flow-matching)
+7. [Deployment](#deployment)
+8. [EEF utilities](#eef-utilities)
+9. [Data preprocessing scripts](#data-preprocessing-scripts)
+10. [Repo structure](#repo-structure)
+11. [Custom lerobot patches](#custom-lerobot-patches)
+12. [Known limitations](#known-limitations)
+
+---
+
+## Requirements
+
+- Python 3.12 (enforced in `pyproject.toml`)
+- [uv](https://astral.sh/uv) package manager
+- SO-101 leader + follower arms (Feetech servos)
+- A USB camera (OpenCV-compatible)
+- CUDA GPU for training (MPS fallback supported for quick local tests)
+
+---
+
+## Installation
 
 ### 1. Install uv
 
@@ -27,49 +62,71 @@ git submodule update --init --recursive
 
 ### 3. Install dependencies
 
-For robot control only:
+Base dependencies only (no hardware drivers):
+
+```bash
+uv sync
+```
+
+With robot control (Feetech drivers, dataset tools, multi-task DiT):
 
 ```bash
 uv sync --extra robot
 ```
 
-For async inference (policy server + client):
+With async inference gRPC stack as well:
 
 ```bash
 uv sync --extra robot --extra inference
 ```
 
+`./scripts/setup.sh` combines `uv sync --extra robot` with submodule init and `.env` validation
+in one shot — useful on a fresh Brev shell.
+
 ### 4. Configure `.env`
 
-The local scripts in `scripts/` source a `.env` file at the repo root. Create one with your serial ports and arm IDs:
+Scripts source a `.env` file at the repo root. Create it:
 
 ```bash
 # .env
-FOLLOWER_PORT=/dev/tty.usbmodem<FOLLOWER_SERIAL>   # e.g. /dev/tty.usbmodem5B141136511
-LEADER_PORT=/dev/tty.usbmodem<LEADER_SERIAL>       # e.g. /dev/tty.usbmodem5B141129431
-FOLLOWER_ID=<your-follower-id>                     # e.g. walleed_follower
-LEADER_ID=<your-leader-id>                         # e.g. walleed_leader
-HF_TOKEN=<your-huggingface-token>                  # needed to push datasets / policies
+FOLLOWER_PORT=/dev/tty.usbmodem5B141136511   # macOS: /dev/tty.usbmodem*, Linux: /dev/ttyACM*
+LEADER_PORT=/dev/tty.usbmodem5B141129431
+FOLLOWER_ID=walleed_follower
+LEADER_ID=walleed_leader
+HF_TOKEN=hf_...                              # push datasets / models to Hub
 ```
 
-To find the serial port for a given controller, plug it in alone and run:
+To find a serial port: plug the arm in alone and run `ls /dev/tty.usbmodem*` (macOS) or
+`ls /dev/ttyACM*` (Linux). The arm IDs are arbitrary labels — they just have to match the
+calibration JSONs in `calibration/`.
+
+### 5. IK / placo (optional)
+
+A5 training, `replay_eef.py`, and `move_eef_forward.py` require Pinocchio + placo for FK/IK.
+These conflict with the `pin>=3.7` pulled in by the main venv, so install them separately:
 
 ```bash
-ls /dev/tty.usbmodem*    # macOS
-ls /dev/ttyACM*          # Linux
+uv pip install "pin==3.4.0" "placo>=0.9.6,<0.9.17"
 ```
 
-The arm IDs are arbitrary labels — they only have to be consistent across `setup_motors`, `calibrate`, `teleoperate`, and `record` so that the calibration JSONs in `calibration/` are picked up correctly.
+**Important:** after this install, invoke those scripts with `.venv/bin/python`, not `uv run`.
+`uv run` resolves `pin` from `pyproject.toml` (>=3.7) and will overwrite the 3.4.0 you just
+installed.
 
-`./scripts/setup.sh` runs `uv sync` and validates that every variable in `.env` is set (any value of `...` or empty triggers a failure).
+```bash
+.venv/bin/python scripts/replay_eef.py --port /dev/tty.usbmodem... --episode 0
+.venv/bin/python scripts/move_eef_forward.py --port /dev/tty.usbmodem... --distance 0.05
+```
 
-## Hardware workflow
+---
 
-These scripts are run from the repo root and assume the venv is active (`source .venv/bin/activate`). Run them in this order the first time you connect the arms.
+## Hardware setup
 
-### 1. One-time motor setup
+Run these steps the first time you connect the arms, in order.
 
-Assigns motor IDs and baud on each chain. Only needed once per arm, or after a motor swap.
+### 1. Motor setup (once per arm)
+
+Assigns servo IDs and baud rate on each chain. Only needed after a fresh arm or a motor swap.
 
 ```bash
 ./scripts/setup_motors.sh
@@ -77,192 +134,337 @@ Assigns motor IDs and baud on each chain. Only needed once per arm, or after a m
 
 ### 2. Calibrate
 
-Records each motor's homing offset and joint limits into `calibration/<id>.json`. Re-run if you re-clock a servo horn or otherwise change the mechanical zero.
+Records homing offsets and joint limits into `calibration/<id>.json` (e.g.
+`calibration/walleed_follower.json`). Re-run only if you re-clock a servo horn or otherwise
+change the mechanical zero.
 
 ```bash
 ./scripts/calibrate_so101.sh
 ```
 
-> **Heads-up:** calibration values are stored in motor EEPROM. If `lerobot-teleoperate` reports *"Mismatch between calibration values in the motor and the calibration file"*, the on-motor values diverged from the JSON — pressing **ENTER** pushes the file back to the motors, while pressing **`c`** triggers a fresh calibration (which will invalidate any policy trained on the previous frame).
+> If `lerobot-teleoperate` reports a mismatch between motor EEPROM and the JSON file: press
+> **ENTER** to push the JSON back to the motors, or **`c`** to recalibrate (which invalidates
+> policies trained on the previous frame).
 
 ### 3. Teleoperate
 
-Reads the leader arm and mirrors it on the follower at 60 Hz, with the front camera streamed to [Rerun](https://www.rerun.io/) for live visualization.
+Mirrors the leader arm on the follower at ~30 Hz and streams the front camera.
 
 ```bash
 ./scripts/run_teleoperation.sh
 ```
 
-If you see `OpenCVCamera(0) latest frame is too old` or repeated `read failed (status=False)` messages: that's a USB/camera issue (cable, hub, macOS Continuity Camera grabbing the device, etc.), not a robot issue. Try MJPG (`fourcc: MJPG`), an external USB webcam, or a different USB port.
+---
 
-### 4. Record a dataset
-
-Records `<NUM_EPISODES>` teleop episodes into a LeRobot dataset and (by default) pushes them to the Hugging Face Hub.
+## Recording data
 
 ```bash
-./scripts/record.sh <REPO_ID> <NUM_EPISODES> "<TASK_DESCRIPTION>" <RESUME>
-# e.g.
-./scripts/record.sh YOUR_USERNAME/towel-fold 30 "Fold the towel" true
+./scripts/record.sh [REPO_ID] [NUM_EPISODES] ["TASK"] [RESUME] [EPISODE_TIME_S]
+# defaults: gaspardthrl/walleed_teleop_gaspard  10  "Fold the towel"  true  60
 ```
 
-All four arguments are optional — see `scripts/record.sh` for defaults.
+Example:
 
-## Policy training
+```bash
+./scripts/record.sh YOUR_USERNAME/towel-fold 30 "Fold the towel" true 60
+```
 
-Both training commands assume:
-- A LeRobot dataset already exists on the Hub (`--dataset.repo_id=...`).
-- You are running on a machine with a CUDA GPU (locally, in a Brev shell, or on any other CUDA host).
-- `HF_TOKEN` is exported (or you have run `huggingface-cli login`) so weights and configs can be pushed at the end.
+Episodes are saved under `./data/` and pushed to the Hugging Face Hub after recording.
+The camera is configured as `front: {type: opencv, index_or_path: 0, 640x480, fps: 30}`.
+
+---
+
+## Training — Diffusion A1–A5
+
+**Dataset:** `gaspardthrl/walleed_fold_combined` (~300 episodes, 460K frames)
+**Architecture:** ResNet-18 + spatial softmax (32 keypoints) + DDPM, 96×96 input, grayworld
+white-balance applied in the encoder, random crop + affine + colour jitter augmentation.
+
+**Shared hyperparameters across all A-variants:**
+
+| Parameter | Value |
+|---|---|
+| Horizon | 32 |
+| n_action_steps | 16 |
+| n_obs_steps | 1 |
+| Noise scheduler | DDPM, 100 train steps, ε-prediction |
+| clip_sample_range | 3.0 |
+| LR | 1e-4, cosine schedule, 500 warmup steps |
+| Steps | 100K |
+| Batch size | 128 |
+| Image transforms | brightness, contrast, warmth jitter + random affine (±8°, ±12%) |
+
+### Ablation overview
+
+| Variant | Script | Action space | State input | Proprio dropout |
+|---|---|---|---|---|
+| A1 | `train_diffusion_A1.sh` | Joint relative (6D) | All 6 joints | 0.0 |
+| A2 | `train_diffusion_A2.sh` | Joint relative (6D) | Gripper only (index 5) | 0.0 |
+| A3 | `train_diffusion_A3.sh` | Joint relative (6D) | All 6 joints | 0.3 |
+| A4 | `train_diffusion_A4.sh` | Joint relative (6D) | None | 0.0 |
+| A5 | `train_diffusion_A5.sh` | EEF delta (10D) | None | 0.0 |
+
+**A1** — Upper-bound baseline: relative joint actions + full proprioception. Gate for the rest
+of the series.
+
+**A2** — Gripper-only state (index 5). Absolute joint angles encode configuration and can cause
+the policy to overfit to the table position seen during collection; removing them forces
+vision-driven position estimation.
+
+**A3** — Full state with 30% dropout during training. At inference the full state is always
+used. Lets a single checkpoint run in either vision-only or full-state mode without retraining.
+
+**A4** — Vision-only hard lower bound (state_dim=0). No state conditioning pathway in the
+model at all.
+
+**A5** — EEF delta action space: `[pos_delta(3), rot_6d_delta(6), gripper(1)]` = 10D.
+Joint-space relative actions still depend on arm configuration; EEF deltas are inherently
+translation-invariant. **Requires precomputed sidecar files** (see below).
+
+### Running a training
+
+```bash
+# A1 with default 100K steps, no Hub push
+./scripts/train_diffusion_A1.sh
+
+# A1 with custom steps and Hub push
+HF_REPO_ID=yourname/diffusion-A1 ./scripts/train_diffusion_A1.sh 50000
+
+# A1 with local data
+DATASET_ROOT=./data_combined HF_REPO_ID=yourname/diffusion-A1 ./scripts/train_diffusion_A1.sh
+```
+
+The same pattern applies to A2–A4. A5 additionally requires:
+
+```bash
+# 1. Precompute EEF sidecar files (once)
+DATASET_ROOT=./data_combined uv run python scripts/precompute_eef_sidecars.py
+
+# 2. Train
+DATASET_ROOT=./data_combined HF_REPO_ID=yourname/diffusion-A5 ./scripts/train_diffusion_A5.sh
+```
+
+A5 looks for `${DATASET_ROOT}/meta/eef_poses.npy` and `${DATASET_ROOT}/meta/eef_stats.json`.
+If they are missing it attempts to download them from the HF dataset repo before failing.
+
+---
+
+## Training — DiT + Flow Matching
+
+Multi-task DiT backbone (CLIP ViT-B/16 vision + text encoder, RoPE, 6 transformer layers,
+hidden_dim=512, 8 heads) trained with Flow Matching instead of DDPM.
+
+**Default dataset:** `gaspardthrl/walleed_teleop_gaspard`
+
+```bash
+./scripts/train_dit_fm.sh                                    # 100K steps
+./scripts/train_dit_fm.sh 50000                              # custom steps
+DATASET_ROOT=./data HF_REPO_ID=yourname/dit-fm ./scripts/train_dit_fm.sh
+```
+
+Key differences from the diffusion A-series:
+
+| Parameter | DiT FM | Diffusion A-series |
+|---|---|---|
+| Policy type | `multi_task_dit` | `diffusion` |
+| Objective | Flow matching | DDPM (ε-prediction) |
+| Inference steps | 10 Euler ODE steps | 5 DDIM steps at deployment |
+| Vision encoder | CLIP ViT-B/16 (fine-tuned at 0.1× LR) | ResNet-18 (spatial softmax) |
+| Image input | 224×224 (no crop, resize only) | 96×96 + random crop |
+| Grayscale | `image_grayscale=true` (train + inference) | `image_grayworld=true` (WB only) |
+| Timestep sampling | Beta(1.5, 1.0) | — |
+| LR | 2e-5 | 1e-4 |
+| Batch size | 64 | 128 |
+
+Image augmentations for DiT FM: brightness, contrast, sharpness jitter + random affine
+(±8°, ±12%) + random erasing (p=0.35).
+
+Additional DiT FM variant scripts in `scripts/`:
+
+- `train_dit_fm_absolute.sh` — absolute (not relative) action space
+- `train_dit_fm_absolute_generalization.sh` — absolute + generalisation-focused augmentation
+- `train_dit_fm_absolute_temporal.sh` — absolute + temporal context (n_obs_steps > 1)
+- `train_dit_fm_frozen_clip.sh` — CLIP encoder frozen throughout
+- `train_dit_fm_relative.sh` — relative actions variant
+- `train_dit_fm_v2.sh` — updated hyperparameters
+- `train_dit_ddpm.sh` — DiT backbone with DDPM instead of FM
+
+---
+
+## Deployment
+
+```bash
+# Default checkpoint (gaspardthrl/diffusion-resnet-merged @ step-100000)
+./scripts/deploy.sh
+
+# Specific HF repo (downloads and caches under ./checkpoints/)
+./scripts/deploy.sh yourname/diffusion-A1
+
+# Specific revision (git branch in the HF repo)
+REVISION=step-100000 ./scripts/deploy.sh gaspardthrl/diffusion-resnet-merged
+
+# Local checkpoint
+./scripts/deploy.sh outputs/diffusion_A1_20250101_120000/checkpoint-100000/pretrained_model
+```
+
+The script reads `FOLLOWER_PORT` and `FOLLOWER_ID` from `.env`.
+
+**Controls during rollout:** Space = pause/resume, q = quit.
+
+**Env vars that modify rollout behaviour:**
+
+| Var | Default | Effect |
+|---|---|---|
+| `TASK` | `"Fold the towel"` | Task string passed to the policy |
+| `DURATION` | `1200` | Max episode duration in seconds |
+| `JOINT_OFFSET` | `0` | Uniform manual offset (degrees) added on top of per-motor auto-offsets |
+| `OFFSET_MOTORS` | `[]` | Motor names whose initial reading is used as a per-motor offset |
+| `REVISION` | `step-100000` | HF repo branch to download |
+
+**Inference engine:** uses `--inference.type=sync` with DDIM-5 steps. Do not switch to
+`inference.type=rtc` for diffusion — RTC replaces the action queue every inference cycle
+(~10 Hz) but `DiffusionPolicy` has no RTC inpainting, causing violent jitter.
+
+**Per-motor joint offsets** (`offset_motors` + `joint_offset`): the `BaseStrategy` reads the
+arm's initial joint positions on the first observation and uses each selected motor's reading
+as an individual offset. This lets you place the arm at a rotated table position and have the
+policy see training-like joint values. `joint_offset` is an optional uniform correction on top.
+
+---
+
+## EEF utilities
+
+Both scripts require placo IK (see [IK / placo](#5-ik--placo-optional) above) and must be
+invoked with `.venv/bin/python`, not `uv run`.
+
+### `scripts/replay_eef.py`
+
+Replays a recorded episode using precomputed EEF poses + IK instead of raw joint angles.
+Useful for verifying delta-mode replay and testing IK quality.
+
+```bash
+.venv/bin/python scripts/replay_eef.py \
+    --port /dev/tty.usbmodem... \
+    --episode 0 \
+    --dataset-root ./data_combined \
+    --fps 30
+```
+
+Requires `data_combined/meta/eef_poses.npy` (generated by `precompute_eef_sidecars.py`).
+The URDF loaded is `so101_new_calib.urdf` at the repo root.
+
+### `scripts/move_eef_forward.py`
+
+Moves the EEF a fixed distance along a world or gripper-local axis, holding orientation.
+Useful for testing IK and placing the arm before a policy rollout.
+
+```bash
+.venv/bin/python scripts/move_eef_forward.py \
+    --port /dev/tty.usbmodem... \
+    --distance 0.05 \
+    --axis local_z   # world: x/y/z  gripper-local: local_x/local_y/local_z
+    --steps 30
+```
+
+---
+
+## Data preprocessing scripts
+
+All scripts live in `scripts/` and are invoked with `uv run python scripts/<name>.py` unless
+otherwise noted.
+
+| Script | Purpose |
+|---|---|
+| `precompute_eef_sidecars.py` | Pinocchio FK over full dataset → `eef_poses.npy` (shape N×12) + `eef_stats.json`. Required before A5 training. |
+| `recompute_stats_relative.py` | Compute relative-action normalisation stats → `relative_stats.json`. Required before A1–A4 training on a new dataset. |
+| `compute_eef_fk.py` | Single-episode FK sanity check + visualisation. |
+| `compute_state_history_scales.py` | Compute per-joint scale factors for state history normalisation → `state_history_scales.json`. |
+| `fix_episode_indices.py` | Repair episode index columns in parquet files (e.g. after partial re-recording). |
+| `fix_video_file_indices.py` | Rename video files to match corrected episode indices. |
+| `fix_video_timestamps.py` | Rewrite video timestamps after episode repairs. |
+| `truncate_at_second_grip.py` | Trim episodes at the second gripper-close event (removes post-fold noise). |
+| `count_gripper_segments.py` | Count gripper open/close segments per episode; used to audit dataset quality. |
+| `precompute_prev_subtask.py` | Pre-label subtask phases for subtask-conditioned models. |
+| `visualize_preprocessing.py` | Visualise raw vs. preprocessed actions for a sample batch. |
+| `diagnose_relative_actions.py` | Check that relative-action stats are consistent with the dataset. |
+
+Usage pattern:
+
+```bash
+# Relative stats
+DATASET_ROOT=./data_combined uv run python scripts/recompute_stats_relative.py
+
+# EEF sidecars (A5 prerequisite)
+DATASET_ROOT=./data_combined uv run python scripts/precompute_eef_sidecars.py
+# Skip Hub upload:
+DATASET_ROOT=./data_combined uv run python scripts/precompute_eef_sidecars.py --no-upload
+```
+
+---
+
+## Repo structure
+
+```
+diffusing/
+├── calibration/                   # Per-arm homing-offset JSONs (committed)
+│   ├── walleed_follower.json
+│   └── walleed_leader.json
+├── scripts/
+│   ├── setup.sh                   # uv sync + .env validation
+│   ├── setup_motors.sh            # One-time servo ID/baud setup
+│   ├── calibrate_so101.sh         # Per-arm calibration
+│   ├── run_teleoperation.sh       # Leader→follower mirror + camera
+│   ├── record.sh                  # Record teleop episodes and push to Hub
+│   ├── deploy.sh                  # Deploy diffusion policy on hardware
+│   ├── train_diffusion_A{1..5}.sh # Ablation training scripts
+│   ├── train_dit_fm.sh            # DiT + Flow Matching training
+│   ├── train_dit_fm_*.sh          # DiT FM variant scripts
+│   ├── replay_eef.py              # EEF-IK episode replay
+│   ├── move_eef_forward.py        # Move EEF along an axis via IK
+│   ├── precompute_eef_sidecars.py # FK precomputation (A5 prerequisite)
+│   ├── recompute_stats_relative.py# Relative-action stats computation
+│   └── [dataset repair / curation scripts — see table above]
+├── src/
+│   └── lerobot_policy_diffusing/  # Project-specific Python (currently minimal)
+├── third_party/
+│   └── lerobot/                   # Custom lerobot fork (git submodule)
+├── so101_new_calib.urdf           # Calibrated SO-101 URDF (required for IK)
+├── state_history_scales.json      # Per-joint scale factors for state history
+├── pyproject.toml
+└── outputs/                       # Training outputs (gitignored)
+```
+
+---
+
+## Custom lerobot patches
+
+The `third_party/lerobot` submodule tracks `GustaveCharles/lerobot` and contains the following
+changes on top of upstream HuggingFace LeRobot:
 
 ### Diffusion policy
 
-Vanilla LeRobot diffusion policy. A safe starting point on ~30–100 demos.
+| File | Change |
+|---|---|
+| `policies/diffusion/configuration_diffusion.py` | Added `image_grayworld` and `image_grayscale` config fields |
+| `policies/diffusion/modeling_diffusion.py` | Grayworld white-balance applied in the encoder forward pass (before the ResNet backbone) when `image_grayworld=True`; grayscale conversion when `image_grayscale=True` |
 
-```bash
-lerobot-train \
-  --dataset.repo_id=YOUR_USERNAME/<DATASET_NAME> \
-  --policy.type=diffusion \
-  --output_dir=outputs/train/diffusion_towel_fold_100 \
-  --job_name=diffusion_towel_fold_100 \
-  --policy.device=cuda \
-  --wandb.enable=false \
-  --policy.repo_id=YOUR_USERNAME/<POLICY_NAME> \
-  --batch_size=64 \
-  --steps=20000 \
-  --save_freq=1000 \
-  --policy.horizon=16 \
-  --policy.n_action_steps=8 \
-  --policy.num_train_timesteps=100 \
-  --policy.num_inference_steps=10 \
-  --policy.prediction_type=epsilon \
-  --policy.dropout=0.1
-```
+### Processor pipeline
 
-Notes on the choices above:
-- `batch_size=64` — diffusion benefits from larger batches; safe on a 24 GB GPU.
-- `steps=20000` — diffusion converges more slowly per step than ACT.
-- `horizon=16` ≈ 0.5 s of actions @ 30 Hz; `n_action_steps=8` executes half the horizon each tick (open-loop chunk).
-- `num_train_timesteps=100` / `num_inference_steps=10` — DDIM-style cheap rollouts at test time.
-- `dropout=0.1` — light regularizer for small (≤100-demo) datasets.
+| File | Change |
+|---|---|
+| `processor/eef_action_processor.py` | `EEFActionProcessorStep` — loads `eef_poses.npy` sidecar, computes chunk-relative EEF deltas (pos 3D + rot 6D + gripper 1D = 10D) on-the-fly, applies MEAN_STD / MIN_MAX normalisation, replaces `batch["action"]`. `EEFUnnormalizeProcessorStep` inverts normalisation at inference. OOB global index clamp at episode boundaries. |
+| `processor/relative_action_processor.py` | `RelativeActionsProcessorStep` (joint relative: action − state) and `AbsoluteActionsProcessorStep` (inverse). |
 
-### Multi-task DiT (diffusion transformer with CLIP conditioning)
+### Rollout
 
-Diffusion-transformer policy with a CLIP image and CLIP text encoder, RoPE, and image augmentations. Heavier than the vanilla diffusion policy — recommended only when you have a beefy GPU and at least a few hundred demos, or when the policy needs to ingest task strings.
+| File | Change |
+|---|---|
+| `rollout/context.py` | Removed the `SyncInferenceEngine` guard that blocked relative-action processor steps. The processor pipeline now handles the relative↔absolute conversion correctly for diffusion. |
+| `rollout/strategies/base.py` | Per-motor joint offsets: on the first observation, each motor in `offset_motors` has its initial reading recorded as an individual offset. This is applied symmetrically to observations (subtract) and actions (add), enabling deployment at a rotated table position without retraining. |
 
-```bash
-lerobot-train \
-  --dataset.repo_id=YOUR_USERNAME/towel-fold \
-  --output_dir=./outputs/towel_fold_dit_gray \
-  --batch_size=32 \
-  --steps=40000 \
-  --save_freq=2500 \
-  --log_freq=100 \
-  --policy.type=multi_task_dit \
-  --policy.device=cuda \
-  --policy.horizon=32 \
-  --policy.n_action_steps=24 \
-  --policy.n_obs_steps=2 \
-  --policy.objective=diffusion \
-  --policy.noise_scheduler_type=DDPM \
-  --policy.num_train_timesteps=100 \
-  --policy.num_layers=8 \
-  --policy.hidden_dim=512 \
-  --policy.num_heads=8 \
-  --policy.dropout=0.1 \
-  --policy.use_rope=true \
-  --policy.vision_encoder_name=openai/clip-vit-base-patch16 \
-  --policy.text_encoder_name=openai/clip-vit-base-patch16 \
-  --policy.image_resize_shape=[240,240] \
-  --policy.image_crop_shape=[224,224] \
-  --policy.image_crop_is_random=true \
-  --policy.optimizer_lr=1e-4 \
-  --policy.vision_encoder_lr_multiplier=0.1 \
-  --dataset.image_transforms.enable=true \
-  --dataset.image_transforms.max_num_transforms=5 \
-  --dataset.image_transforms.tfs='{"desaturate":{"type":"ColorJitter","weight":10.0,"kwargs":{"saturation":[0.0,0.0]}},"brightness":{"type":"ColorJitter","kwargs":{"brightness":[0.7,1.3]}},"contrast":{"type":"ColorJitter","kwargs":{"contrast":[0.7,1.3]}},"sharpness":{"type":"SharpnessJitter","kwargs":{"sharpness":[0.6,1.4]}},"rotation":{"type":"RandomRotation","kwargs":{"degrees":[-8,8]}},"translation":{"type":"RandomAffine","kwargs":{"degrees":0,"translate":[0.12,0.12]}}}' \
-  --policy.repo_id=YOUR_USERNAME/towel-fold-dit-gray \
-  --wandb.enable=true
-```
+### Kinematics / IK
 
-Key knobs:
-- `--policy.type=multi_task_dit` — DiT backbone with CLIP conditioning. Replaces the U-Net used by `--policy.type=diffusion`.
-- `--policy.horizon=32`, `--policy.n_action_steps=24`, `--policy.n_obs_steps=2` — predict 32 future actions, execute 24 of them per tick, condition on the last 2 observations.
-- `--policy.num_layers=8`, `--policy.hidden_dim=512`, `--policy.num_heads=8` — DiT capacity. Reduce if you run out of GPU memory.
-- `--policy.use_rope=true` — rotary position embeddings inside the DiT.
-- `--policy.vision_encoder_name` / `--policy.text_encoder_name` — both default to `openai/clip-vit-base-patch16` so a single CLIP checkpoint provides aligned image/text features. The vision encoder is fine-tuned at 0.1× the base LR (`--policy.vision_encoder_lr_multiplier`).
-- `--policy.image_resize_shape=[240,240]` then `--policy.image_crop_shape=[224,224]` with `image_crop_is_random=true` — standard CLIP-style augmentation: resize, random-crop at training time (center-crop at eval).
-- `--dataset.image_transforms.tfs='{...}'` — domain-randomization stack:
-  - `desaturate` (weight 10) collapses saturation to 0 → effectively trains on a grayscale variant most of the time (hence the `_gray` in `output_dir`). Helps the model not overfit to towel colors.
-  - `brightness`, `contrast`, `sharpness` — photometric jitter.
-  - `rotation` (±8°) and `translation` (±12% of frame) — light geometric jitter.
-  - `max_num_transforms=5` caps how many of the above are applied per sample.
-- `--wandb.enable=true` — logs to W&B; needs `WANDB_API_KEY` exported (or `wandb login`).
-
-The trained checkpoint is pushed to `--policy.repo_id` at the end and can be loaded by the async inference client below via `--pretrained_name_or_path`.
-
-## Async inference
-
-LeRobot's `policy_server` runs the model on a GPU host; the local `robot_client` connects over gRPC, streams observations to the server, and applies the returned action chunks on the SO-101.
-
-### Server (e.g. on a Brev GPU shell)
-
-```bash
-brev shell <your-brev-instance>
-git clone git@github.com:<your-username>/diffusing.git
-cd diffusing
-./scripts/setup.sh
-source $HOME/.local/bin/env
-uv pip install "lerobot[act, async]" grpcio grpcio-tools protobuf
-
-uv run python -m lerobot.async_inference.policy_server \
-  --host=0.0.0.0 \
-  --port=8080
-```
-
-### Client (local machine with the SO-101)
-
-Forward the server port locally:
-
-```bash
-brev port-forward <your-brev-instance> --port 8080:8080
-```
-
-Install the matching extras and start the client:
-
-```bash
-uv pip install "lerobot[act, async]" grpcio grpcio-tools protobuf
-
-python -m lerobot.async_inference.robot_client \
-  --server_address=localhost:8080 \
-  --robot.type=so101_follower \
-  --robot.port=$FOLLOWER_PORT \
-  --robot.id=$FOLLOWER_ID \
-  --robot.calibration_dir=./calibration \
-  --robot.cameras="{front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30, fourcc: MJPG}}" \
-  --policy_type=act \
-  --pretrained_name_or_path=YOUR_USERNAME/<POLICY_NAME> \
-  --policy_device=cuda \
-  --client_device=cpu \
-  --actions_per_chunk=64 \
-  --chunk_size_threshold=0.5 \
-  --aggregate_fn_name=weighted_average \
-  --debug_visualize_queue_size=True
-```
-
-Swap `--policy_type=act` for `--policy_type=diffusion` or `--policy_type=multi_task_dit` to run the corresponding policy.
-
-## Repo layout
-
-```
-.
-├── calibration/             # per-arm homing-offset JSONs (committed)
-├── scripts/                 # thin wrappers over lerobot CLIs
-│   ├── setup.sh             # uv install + .env validation
-│   ├── setup_motors.sh      # one-time motor ID/baud setup
-│   ├── calibrate_so101.sh   # per-arm calibration
-│   ├── run_teleoperation.sh # leader → follower mirroring + camera
-│   └── record.sh            # record a teleop dataset and push to the Hub
-├── src/                     # project-specific Python (policies, etc.)
-├── third_party/lerobot/     # vendored LeRobot submodule
-└── outputs/                 # training outputs (gitignored)
-```
+| File | Change |
+|---|---|
+| `model/kinematics.py` | IK solver runs 10 iterations per step (single call was insufficient for orientation convergence) |
+| `robots/so_follower/robot_kinematic_processor.py` | `orientation_weight` field added to `InverseKinematicsEEToJoints` config |
