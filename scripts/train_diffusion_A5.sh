@@ -117,3 +117,4 @@ uv run lerobot-train \
   --output_dir="${OUTPUT_DIR}"
 
 echo "Done. Checkpoint: ${OUTPUT_DIR}"
+echo "Deploy with: uv run python scripts/deploy_eef.py --repo <your-hf-repo>"
