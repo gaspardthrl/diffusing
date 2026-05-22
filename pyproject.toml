@@ -46,6 +46,9 @@ dev-dependencies = [
 [tool.uv.sources]
 lerobot = { path = "third_party/lerobot", editable = true }
 
+[tool.setuptools]
+packages = []
+
 [tool.ruff]
 line-length = 110
 target-version = "py312"
